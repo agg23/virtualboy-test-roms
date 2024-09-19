@@ -20,5 +20,5 @@
 
 u8 buttonsPressed(u16 buttons, u8 forceRelease)
 {
-	return (vbReadPad() & buttons & ~K_PWR) && (!forceRelease || vbPadKeyUp());
+	return (vbReadPad() & buttons & ~K_PWR) && (!forceRelease || (vbPadKeyUp() & buttons));
 }

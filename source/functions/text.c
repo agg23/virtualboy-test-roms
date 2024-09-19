@@ -57,3 +57,16 @@ void printString(u8 bgmap, u16 x, u16 y, char* t_string)
 		i++;
 	}
 }
+
+void clear_line(u8 bgmap, u16 y)
+{
+	u16 y_offset = y << 6;
+
+	int i;
+	
+	for (i = 0; i < 384; i++) {
+		u16 pos = y_offset + i;
+
+		BGMM[(0x1000 * bgmap) + pos] = 0;
+	}
+}

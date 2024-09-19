@@ -2,6 +2,9 @@
 #include <functions.h>
 
 // register u32 timer_counter asm ("r15");
+u32 execution_count = 0;
+
+u16 last_input = 0;
 
 void reverse(char* str, int length) {
     int start = 0;
@@ -43,31 +46,41 @@ void u32ToStr(u32 num, char* str) {
     reverse(str, i);
 }
 
-void performTest()
+bool check_newly_pressed_buttons(u16 buttons) {
+	u16 current_input = vbReadPad();
+
+	bool result = (current_input & buttons) && !(last_input & buttons);
+
+	last_input = current_input;
+
+	return result;
+}
+
+void display_execution_count()
+{
+	char string[10];
+	u32ToStr(execution_count, string);
+
+	clear_line(0, 2);
+	
+	printString(0, 5, 2, "Execution count: ");
+	printString(0, 5 + 17, 2, string);
+}
+
+void perform_test()
 {
 	// clearScreen();
+
+	execution_count += 1;
 	
 	printString(0, 19, 13, "Performing test");
+
+	display_execution_count();
 	
-	// setup timer interrupts
-	// VIP_REGS[INTCLR] = VIP_REGS[INTPND];
-	// VIP_REGS[INTENB] = 0x0000; // this is only for enabling\disabling different kinds of vpu and error ints
-	timer_set(1);
-	timer_freq(1);
-	timer_clearstat();
-	timer_int(1);
-	timer_enable(1);
+	// Enable interrupts
 	INT_ENABLE;
 
-	// setup timer
-	// Timer will fire every 1 interval (20us)
-	// timer_set(10000);
-	// timer_freq(1);
-	// timer_clearstat();
-	// timer_int(1);
-	// timer_enable(1);
-	// HW_REGS[TCR] = 0b11001;
-
+	// Prepare experiment, start timer, and run
 	asm volatile (
 		// Prepare TCR address
 		"movea 0x200, r0, r14;"
@@ -84,24 +97,23 @@ void performTest()
 		"add 4, r15;" // 1 cycle
 		// Jump to loop label
 		"jr 1b;" // 3 cycles
-		// Set return variable
-		// : "=r" (timerCounter)
-		// // Set first argument variable
-		// : "r" (timerCounter)
 		: // Output
 		: // Input
 		: "r14", "r15" // r14, r15 is clobbered
 	);
 }
 
-void timer_handler() {
-	// asm volatile (
-	// 	"mov 0x1, r15;"
-	// 	:
-	// 	:
-	// 	: "r15"
-	// );
+void print_keys() {
+	u16 keys = vbReadPad();
 
+	if (keys & K_A) {
+		printString(0, 0, 1, "A");
+	} else {
+		printString(0, 0, 1, " ");
+	}
+}
+
+void timer_handler() {
 	u32 timer_counter;
 
 	asm volatile (
@@ -116,25 +128,20 @@ void timer_handler() {
 
 	leave_interrupt_handler();
 
-	clearScreen();
+	clear_line(0, 13);
 
 	printString(0, 19, 13, "Timer completed");
 
 	char string[10];
-
 	u32ToStr(timer_counter, string);
 
 	printString(0, 19, 14, string);
 
-	// performTest();
-
 	while (1) {
-		if (buttonsPressed(K_A, true)) {
-			performTest();
+		if (check_newly_pressed_buttons(K_A)) {
+			perform_test();
 		}
 	}
-
-	while (1) {}
 }
 
 int main()
@@ -160,13 +167,17 @@ int main()
 	// Shared global for the timer interrupt vector
 	timVector = (u32)(timer_handler);
 
+	timer_set(1);
+	timer_freq(1);
+	timer_clearstat();
+	timer_int(1);
+	timer_enable(1);
+
 	while (1) {
-		if (buttonsPressed(K_A, true)) {
-			performTest();
+		if (check_newly_pressed_buttons(K_A)) {
+			perform_test();
 		}
 	}
-
-	while (1) {}
 
     return 0;
 }

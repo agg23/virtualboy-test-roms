@@ -24,5 +24,7 @@
 void printString(u8 bgmap, u16 x, u16 y, char* t_string);
 char* getString(int str);
 
+void clear_line(u8 bgmap, u16 y);
+
  
 #endif
