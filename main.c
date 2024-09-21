@@ -69,8 +69,6 @@ void display_execution_count()
 
 void perform_test()
 {
-	// clearScreen();
-
 	execution_count += 1;
 	
 	printString(0, 19, 13, "Performing test");
@@ -85,8 +83,8 @@ void perform_test()
 		// Prepare TCR address
 		"movea 0x200, r0, r14;"
 		"shl 16, r14;"
-		// Set TCR (timer control). 20us timer, enable interrupt, enable timer
-		"mov 0b11001, r15;"
+		// Set TCR (timer control). 20us timer, enable interrupt, clear zero, enable timer
+		"mov 0b11101, r15;"
 		"st.b r15, 0x20 r14;"
 		// Timer started
 		// Clear r15
@@ -121,9 +119,8 @@ void timer_handler() {
 		: "=r" (timer_counter)
 	);
 
-	// clear timer state
-	timer_enable(0);
-	timer_clearstat();
+	// Clear timer state
+	HW_REGS[TCR] = 0b10100;
 	set_intlevel(0);
 
 	leave_interrupt_handler();
@@ -168,10 +165,6 @@ int main()
 	timVector = (u32)(timer_handler);
 
 	timer_set(1);
-	timer_freq(1);
-	timer_clearstat();
-	timer_int(1);
-	timer_enable(1);
 
 	while (1) {
 		if (check_newly_pressed_buttons(K_A)) {
