@@ -6,6 +6,9 @@ u32 execution_count = 0;
 
 u16 last_input = 0;
 
+int timer_expected_run_count = 1;
+volatile int timer_current_run_count = 0;
+
 void reverse(char* str, int length) {
     int start = 0;
     int end = length - 1;
@@ -56,7 +59,7 @@ bool check_newly_pressed_buttons(u16 buttons) {
 	return result;
 }
 
-void display_execution_count()
+void update_ui()
 {
 	char string[10];
 	u32ToStr(execution_count, string);
@@ -65,15 +68,36 @@ void display_execution_count()
 	
 	printString(0, 5, 2, "Execution count: ");
 	printString(0, 5 + 17, 2, string);
+
+	u32ToStr(timer_expected_run_count, string);
+
+	printString(0, 5 + 18 + 5, 2, "Timer iter: ");
+	printString(0, 5 + 18 + 5 + 13, 2, string);
+}
+
+void counter_loop()
+{
+	asm volatile (
+		// Loop label
+		"1:"
+		"add 4, r15;" // 1 cycle
+		// Jump to loop label
+		"jr 1b;" // 3 cycles
+		: // Output
+		: // Input
+		: "r15" // r14, r15 is clobbered
+	);
 }
 
 void perform_test()
 {
 	execution_count += 1;
+
+	timer_current_run_count = 0;
 	
 	printString(0, 19, 13, "Performing test");
 
-	display_execution_count();
+	update_ui();
 	
 	// Enable interrupts
 	INT_ENABLE;
@@ -90,28 +114,45 @@ void perform_test()
 		// Clear r15
 		"mov 0, r15;" // 1 cycle
 		"add 2, r15;" // 1 cycle
-		// Loop label
-		"1:"
-		"add 4, r15;" // 1 cycle
-		// Jump to loop label
-		"jr 1b;" // 3 cycles
+		// Start counting
+		"jr %0;"
 		: // Output
-		: // Input
+		: "i" (counter_loop) // Input
 		: "r14", "r15" // r14, r15 is clobbered
 	);
 }
 
-void print_keys() {
-	u16 keys = vbReadPad();
+void update_run_count(bool increment) {
+	if (increment) {
+		timer_expected_run_count += 1;
+	} else if (timer_expected_run_count > 1) {
+		timer_expected_run_count -= 1;
+	}
 
-	if (keys & K_A) {
-		printString(0, 0, 1, "A");
-	} else {
-		printString(0, 0, 1, " ");
+	update_ui();
+}
+
+void key_runtime() {
+	while (1) {
+		if (check_newly_pressed_buttons(K_A)) {
+			perform_test();
+		} else if (check_newly_pressed_buttons(K_LR)) {
+			update_run_count(true);
+		} else if (check_newly_pressed_buttons(K_LL)) {
+			update_run_count(false);
+		}
 	}
 }
 
-void timer_handler() {
+void test() {
+		char string[10];
+	u32ToStr(timer_current_run_count, string);
+
+	printString(0, 19, 13, "Test");
+	printString(0, 19, 17, string);
+}
+
+void timer_completed() {
 	u32 timer_counter;
 
 	asm volatile (
@@ -134,11 +175,54 @@ void timer_handler() {
 
 	printString(0, 19, 14, string);
 
-	while (1) {
-		if (check_newly_pressed_buttons(K_A)) {
-			perform_test();
-		}
-	}
+	key_runtime();
+}
+
+void timer_handler() {
+	asm volatile (
+		// Increment timer_current_run_count
+		// The loading of variables into registers probably runs instructions, so this cycle count will be slightly off
+		"ld.w 0[%0], r5;"
+		"add 1, r5;" // 1 cycle
+		"st.w r5, 0[%0];"
+		// "mov r5, %0;"
+		"cmp r5 %1;" // 1 cycle
+		// // If counts are equal, we're done. Jump to general ending method
+		"be %2;" // 1 cycle if not taken, which is what we care about
+		// Otherwise we're still keeping track of cycles
+		// Set intlevel (copied from asm.c)
+		"stsr	sr5, r5;" // 8 cycles
+	    "movhi	0xFFF1, r0, r6;" // 1 cycle
+	    "movea	0xFFFF, r6, r6;" // 1 cycle
+	    "and		r5,r6;" // 1 cycle
+	    "mov		0,r5;" // 1 cycle
+	    "andi	0x000F,r5,r5;" // 1 cycle
+	    "shl		0x10,r5;" // 1 cycle
+	    "or		r6,r5;" // 1 cycle
+	    "ldsr	r5,sr5;" // 8 cycles
+		// Leave interrupt
+		"stsr psw, r5;" // 8 cycles
+		"movhi 0xFFF0, r0, r6;" // 1 cycle
+		"movea 0x8FFF, r6, r6;" // 1 cycle
+		"ldsr r5, psw;" // 8 cycles
+		"cli;" // 12 cycles
+		// Prepare TCR address
+		"movea 0x200, r0, r14;" // 1 cycle
+		"shl 16, r14;" // 1 cycle
+		// Set TCR (timer control). Clear timer state but keep everything enabled
+		"mov 0b11101, r13;" // 1 cycle
+		"st.b r13, 0x20 r14;" // 1 cycle if standalone
+		// Update counts (including this following jump)
+		// TODO: Fix counts
+		"addi 63, r15, r15;"
+		// Start counting
+		"jr %3;"
+		: // Output
+		: "r" (&timer_current_run_count), "r" (timer_expected_run_count), "i" (timer_completed), "i" (leave_interrupt_handler), "i" (test) // Input
+		: "memory", "r5", "r6", "r13", "r14", "r15" // r13, r14, r15 is clobbered
+	);
+
+	test();
 }
 
 int main()
@@ -166,11 +250,7 @@ int main()
 
 	timer_set(1);
 
-	while (1) {
-		if (check_newly_pressed_buttons(K_A)) {
-			perform_test();
-		}
-	}
+	key_runtime();
 
     return 0;
 }
