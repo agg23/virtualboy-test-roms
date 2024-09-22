@@ -49,14 +49,8 @@ void u32ToStr(u32 num, char* str) {
     reverse(str, i);
 }
 
-bool check_newly_pressed_buttons(u16 buttons) {
-	u16 current_input = vbReadPad();
-
-	bool result = (current_input & buttons) && !(last_input & buttons);
-
-	last_input = current_input;
-
-	return result;
+bool check_newly_pressed_buttons(u16 pad_value, u16 buttons) {
+	return (pad_value & buttons) && !(last_input & buttons);
 }
 
 void update_ui()
@@ -134,22 +128,18 @@ void update_run_count(bool increment) {
 
 void key_runtime() {
 	while (1) {
-		if (check_newly_pressed_buttons(K_A)) {
+		u16 current_input = vbReadPad();
+
+		if (check_newly_pressed_buttons(current_input, K_A)) {
 			perform_test();
-		} else if (check_newly_pressed_buttons(K_LR)) {
+		} else if (check_newly_pressed_buttons(current_input, K_LR)) {
 			update_run_count(true);
-		} else if (check_newly_pressed_buttons(K_LL)) {
+		} else if (check_newly_pressed_buttons(current_input, K_LL)) {
 			update_run_count(false);
 		}
+
+		last_input = current_input;
 	}
-}
-
-void test() {
-		char string[10];
-	u32ToStr(timer_current_run_count, string);
-
-	printString(0, 19, 13, "Test");
-	printString(0, 19, 17, string);
 }
 
 void timer_completed() {
@@ -218,11 +208,9 @@ void timer_handler() {
 		// Start counting
 		"jr %3;"
 		: // Output
-		: "r" (&timer_current_run_count), "r" (timer_expected_run_count), "i" (timer_completed), "i" (leave_interrupt_handler), "i" (test) // Input
+		: "r" (&timer_current_run_count), "r" (timer_expected_run_count), "i" (timer_completed), "i" (leave_interrupt_handler) // Input
 		: "memory", "r5", "r6", "r13", "r14", "r15" // r13, r14, r15 is clobbered
 	);
-
-	test();
 }
 
 int main()
