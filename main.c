@@ -131,10 +131,16 @@ void key_runtime() {
 		u16 current_input = vbReadPad();
 
 		if (check_newly_pressed_buttons(current_input, K_A)) {
+			last_input = current_input;
+
 			perform_test();
 		} else if (check_newly_pressed_buttons(current_input, K_LR)) {
+			last_input = current_input;
+
 			update_run_count(true);
 		} else if (check_newly_pressed_buttons(current_input, K_LL)) {
+			last_input = current_input;
+
 			update_run_count(false);
 		}
 
@@ -172,12 +178,11 @@ void timer_handler() {
 	asm volatile (
 		// Increment timer_current_run_count
 		// The loading of variables into registers probably runs instructions, so this cycle count will be slightly off
-		"ld.w 0[%0], r5;"
+		"ld.w 0[%0], r5;" // 5 cycles
 		"add 1, r5;" // 1 cycle
-		"st.w r5, 0[%0];"
-		// "mov r5, %0;"
+		"st.w r5, 0[%0];" // 1 cycle
 		"cmp r5 %1;" // 1 cycle
-		// // If counts are equal, we're done. Jump to general ending method
+		// If counts are equal, we're done. Jump to general ending method
 		"be %2;" // 1 cycle if not taken, which is what we care about
 		// Otherwise we're still keeping track of cycles
 		// Set intlevel (copied from asm.c)
@@ -192,8 +197,9 @@ void timer_handler() {
 	    "ldsr	r5,sr5;" // 8 cycles
 		// Leave interrupt
 		"stsr psw, r5;" // 8 cycles
-		"movhi 0xFFF0, r0, r6;" // 1 cycle
-		"movea 0x8FFF, r6, r6;" // 1 cycle
+		"movea 0x8FFF, r0, r6;" // 1 cycle
+		"movhi 0xFFF0, r6, r6;" // 1 cycle
+		"and r6, r5;" // 1 cycle
 		"ldsr r5, psw;" // 8 cycles
 		"cli;" // 12 cycles
 		// Prepare TCR address
@@ -203,13 +209,12 @@ void timer_handler() {
 		"mov 0b11101, r13;" // 1 cycle
 		"st.b r13, 0x20 r14;" // 1 cycle if standalone
 		// Update counts (including this following jump)
-		// TODO: Fix counts
-		"addi 63, r15, r15;"
+		"addi 71, r15, r15;" // 1 cycle
 		// Start counting
-		"jr %3;"
+		"jr %3;" // 3 cycles
 		: // Output
-		: "r" (&timer_current_run_count), "r" (timer_expected_run_count), "i" (timer_completed), "i" (leave_interrupt_handler) // Input
-		: "memory", "r5", "r6", "r13", "r14", "r15" // r13, r14, r15 is clobbered
+		: "r" (&timer_current_run_count), "r" (timer_expected_run_count), "i" (timer_completed), "i" (counter_loop) // Input
+		: "memory", "r5", "r6", "r13", "r14", "r15" // Clobber
 	);
 }
 
