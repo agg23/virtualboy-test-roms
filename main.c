@@ -92,6 +92,8 @@ void perform_test()
 	printString(0, 19, 13, "Performing test");
 
 	update_ui();
+
+	timer_set(1);
 	
 	// Enable interrupts
 	INT_ENABLE;
@@ -107,9 +109,9 @@ void perform_test()
 		// Timer started
 		// Clear r15
 		"mov 0, r15;" // 1 cycle
-		"add 2, r15;" // 1 cycle
+		"add 5, r15;" // 1 cycle
 		// Start counting
-		"jr %0;"
+		"jr %0;" // 3 cycles
 		: // Output
 		: "i" (counter_loop) // Input
 		: "r14", "r15" // r14, r15 is clobbered
@@ -240,8 +242,6 @@ int main()
 
 	// Shared global for the timer interrupt vector
 	timVector = (u32)(timer_handler);
-
-	timer_set(1);
 
 	key_runtime();
 
