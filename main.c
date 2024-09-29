@@ -176,10 +176,10 @@ void timer_completed() {
 	key_runtime();
 }
 
+// The loading of variables into registers probably runs instructions, so this cycle count will be slightly off
 void timer_handler() {
 	asm volatile (
 		// Increment timer_current_run_count
-		// The loading of variables into registers probably runs instructions, so this cycle count will be slightly off
 		"ld.w 0[%0], r5;" // 5 cycles
 		"add 1, r5;" // 1 cycle
 		"st.w r5, 0[%0];" // 1 cycle
@@ -210,8 +210,10 @@ void timer_handler() {
 		// Set TCR (timer control). Clear timer state but keep everything enabled
 		"mov 0b11101, r13;" // 1 cycle
 		"st.b r13, 0x20 r14;" // 1 cycle if standalone
+		"mov 1, r13;" // 1 cycle
+		"st.b r13, 0x18 r14;" // 1 cycle if standalone
 		// Update counts (including this following jump)
-		"addi 71, r15, r15;" // 1 cycle
+		"addi 73, r15, r15;" // 1 cycle
 		// Start counting
 		"jr %3;" // 3 cycles
 		: // Output
