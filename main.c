@@ -213,6 +213,7 @@ void timer_handler() {
 		"mov 1, r13;" // 1 cycle
 		"st.b r13, 0x18 r14;" // 1 cycle if standalone
 		// Update counts (including this following jump)
+		// TODO: Add timer interrupt timing (from crt0)
 		"addi 73, r15, r15;" // 1 cycle
 		// Start counting
 		"jr %3;" // 3 cycles
