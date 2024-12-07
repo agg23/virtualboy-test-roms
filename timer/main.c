@@ -9,6 +9,8 @@ u16 last_input = 0;
 int timer_expected_run_count = 1;
 volatile int timer_current_run_count = 0;
 
+volatile int cycle_count = 0;
+
 void reverse(char* str, int length) {
     int start = 0;
     int end = length - 1;
@@ -151,12 +153,12 @@ void key_runtime() {
 }
 
 void timer_completed() {
-	u32 timer_counter;
+	u32 timer_counter = cycle_count;
 
-	asm volatile (
-		"mov r15, %0"
-		: "=r" (timer_counter)
-	);
+	// asm volatile (
+	// 	"mov r15, %0"
+	// 	: "=r" (timer_counter)
+	// );
 
 	// Clear timer state
 	HW_REGS[TCR] = 0b10100;
